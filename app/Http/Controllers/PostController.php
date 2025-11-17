@@ -87,15 +87,20 @@ class PostController extends Controller
      */
     public function destroy(Post $post)
     {
-        // 1. Otorisasi: Apakah user ini pemilik POST?
-        if ($post->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Tidak diizinkan'], 403);
+        // KITA PERLU TAHU SIAPA PEMILIK BOARD
+        $boardOwnerId = $post->board->user_id;
+
+        // Otorisasi: User boleh hapus JIKA:
+        // 1. Dia adalah pemilik post INI
+        // ATAU
+        // 2. Dia adalah pemilik BOARD tempat post ini berada
+        if ($post->user_id === Auth::id() || $boardOwnerId === Auth::id()) {
+            // Jika salah satu benar, izinkan hapus
+            $post->delete();
+            return response()->json(null, 204);
         }
 
-        // 2. Hapus
-        $post->delete();
-
-        // 3. Kembalikan respons No Content
-        return response()->json(null, 204);
+        // Jika tidak keduanya, tolak
+        return response()->json(['message' => 'Tidak diizinkan'], 403);
     }
 }

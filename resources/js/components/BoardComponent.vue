@@ -1,7 +1,13 @@
 <template>
     <div class="container">
         <div v-if="isLoggedIn">
-            <h1>Papan Tulis Saya</h1>
+
+            <div class="header-bar">
+                <h1>Papan Tulis Saya</h1>
+                <button @click="handleLogout" class="btn-logout">
+                    Logout
+                </button>
+            </div>
 
             <div v-if="selectedBoardId">
                 <button @click="selectedBoardId = null" class="btn-secondary">
@@ -26,9 +32,17 @@
                 <div v-if="isLoading" class="loading">Memuat data board...</div>
 
                 <ul v-else-if="boards.length > 0" class="board-list">
-                    <li v-for="board in boards" :key="board.id" class="board-item" @click="selectBoard(board)">
-                        <h3>{{ board.title }}</h3>
-                        <p>{{ board.description || 'Tidak ada deskripsi' }}</p>
+                    <li v-for="board in boards" :key="board.id" class="board-item">
+
+                        <div classT="board-content" @click="selectBoard(board)">
+                            <h3>{{ board.title }}</h3>
+                            <p>{{ board.description || 'Tidak ada deskripsi' }}</p>
+                        </div>
+
+                        <button @click.stop="deleteBoard(board)" class="btn-delete">
+                            &times;
+                        </button>
+
                     </li>
                 </ul>
 
@@ -38,8 +52,9 @@
             </div>
         </div>
 
-        <div v-else class="login-prompt">
-            <p>Silakan login untuk melihat papan tulis Anda.</p>
+        <div v-else class="login-register-area">
+            <login-component></login-component>
+            <register-component></register-component>
         </div>
     </div>
 </template>
@@ -89,10 +104,14 @@ export default {
                 this.boards = response.data;
             } catch (error) {
                 console.error("Gagal mengambil data board:", error);
-                // Jika token-nya salah/expired, kita hapus
+
                 if (error.response && error.response.status === 401) {
+                    // Token tidak valid (expired atau user dihapus)
                     localStorage.removeItem("api_token");
                     this.isLoggedIn = false;
+
+                    // PAKSA refresh halaman untuk me-reset state semua komponen
+                    window.location.reload();
                 }
             } finally {
                 this.isLoading = false;
@@ -128,6 +147,41 @@ export default {
             } finally {
                 this.isCreatingBoard = false;
             }
+        },
+
+        async deleteBoard(board) {
+            // Konfirmasi dulu
+            if (!confirm(`Yakin ingin menghapus board "${board.title}"? Ini akan menghapus SEMUA catatannya.`)) {
+                return;
+            }
+
+            try {
+                // Panggil API DELETE board
+                await axios.delete(`/api/boards/${board.id}`);
+
+                // Update UI: Hapus board dari array
+                this.boards = this.boards.filter(b => b.id !== board.id);
+
+            } catch (error) {
+                console.error('Gagal menghapus board:', error);
+                alert('Gagal menghapus board. Coba lagi.');
+            }
+        },
+
+        async handleLogout() {
+            try {
+                // 1. Beri tahu backend (Breeze) untuk membatalkan token
+                await axios.post('/api/logout');
+            } catch (error) {
+                // Tidak masalah jika gagal (misal token sudah kadaluwarsa)
+                console.error('Logout di server gagal, tapi tetap lanjut logout:', error);
+            } finally {
+                // 2. INI YANG PENTING: Hapus token dari browser
+                localStorage.removeItem('api_token');
+
+                // 3. Refresh halaman untuk me-reset state Vue
+                window.location.reload();
+            }
         }
     },
 };
@@ -138,6 +192,27 @@ export default {
     text-align: center;
     color: #666;
     padding-top: 20px;
+}
+
+.header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.header-bar h1 {
+    margin: 40;
+}
+
+.btn-logout {
+    padding: 8px 12px;
+    background-color: #dc3545;
+    /* Merah */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
 .container {
@@ -232,5 +307,47 @@ h3 {
     width: 100%;
     /* Agar error di atas form */
     flex-basis: 100%;
+}
+.btn-delete {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+.board-item {
+  position: relative; /* Diperlukan untuk tombol absolute */
+}
+.board-item:hover .btn-delete {
+  opacity: 1;
+}
+
+.btn-delete-post {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: transparent;
+  color: #aaa;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: all 0.2s;
+}
+.post-item {
+  position: relative; /* Diperlukan untuk tombol absolute */
+}
+.post-item:hover .btn-delete-post {
+  opacity: 1;
+  color: #ff6b6b;
 }
 </style>

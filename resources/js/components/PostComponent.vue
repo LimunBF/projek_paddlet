@@ -2,6 +2,10 @@
     <div class="post-container">
         <h2>Catatan di Papan Tulis</h2>
 
+        <div v-if="newPostAvailable" class="notification-bar" @click="loadNewPosts">
+            Ada catatan baru! Klik di sini untuk memuat.
+        </div>
+
         <form @submit.prevent="handleNewPost" class="new-post-form">
             <div v-if="postError" class="error-message">
                 {{ postError }}
@@ -19,6 +23,11 @@
         <draggable v-else-if="posts.length > 0" v-model="posts" @end="onDragEnd" item-key="id" class="post-list-grid">
             <template #item="{ element: post }">
                 <div class="post-item">
+
+                    <button @click="deletePost(post)" class="btn-delete-post">
+                        &times;
+                    </button>
+
                     <p>{{ post.content }}</p>
                     <small>oleh: {{ post.user ? post.user.name : 'Tamu' }}</small>
                 </div>
@@ -42,7 +51,7 @@ export default {
 
     props: {
         boardId: {
-            type: Number,
+            type: [String, Number],
             required: true,
         },
     },
@@ -54,32 +63,52 @@ export default {
             newPostContent: '',
             isSubmitting: false,
             postError: null,
+
+            // === DATA BARU UNTUK POLLING ===
+            timer: null,           // Untuk menyimpan ID setInterval
+            knownPostCount: 0,   // Jumlah post yang diketahui klien
+            newPostAvailable: false, // Status untuk notifikasi
         };
     },
 
     mounted() {
         this.fetchPosts();
+        this.startPolling();
+    },
+
+    unmounted() {
+        this.stopPolling();
     },
 
     methods: {
         async fetchPosts() {
             if (!this.boardId) return;
             this.isLoading = true;
+            this.newPostAvailable = false; // Sembunyikan notifikasi
             try {
                 const response = await axios.get(
                     `/api/boards/${this.boardId}/posts`
                 );
-                this.posts = response.data.sort((a, b) => {
-                    if (a.position_y !== b.position_y) {
-                        return a.position_y - b.position_y;
-                    }
-                    return a.position_x - b.position_x;
-                });
+                this.posts = response.data.sort((a, b) => a.position_y - b.position_y);
+
+                // Simpan jumlah post yang sekarang diketahui
+                this.knownPostCount = this.posts.length;
+
             } catch (error) {
                 console.error("Gagal mengambil posts:", error);
             } finally {
                 this.isLoading = false;
             }
+        },
+
+        // Panggil fetchPosts() saat notifikasi diklik
+        loadNewPosts() {
+            // 1. Ambil post baru
+            this.fetchPosts();
+
+            // 2. NYALAKAN KEMBALI TIMER
+            //    untuk mendengarkan pembaruan di masa depan.
+            this.startPolling();
         },
 
         async handleNewPost() {
@@ -99,6 +128,8 @@ export default {
                 }
                 this.posts.unshift(response.data);
                 this.newPostContent = '';
+                // Update hitungan post yang kita tahu
+                this.knownPostCount = this.posts.length;
             } catch (error) {
                 console.error('Gagal menyimpan post:', error);
                 this.postError = 'Gagal menyimpan catatan. Coba lagi.';
@@ -130,6 +161,61 @@ export default {
                         }
                     });
             });
+        },
+
+        async deletePost(post) {
+            if (!confirm('Yakin ingin menghapus catatan ini?')) {
+                return;
+            }
+
+            try {
+                // Panggil API DELETE post
+                await axios.delete(`/api/posts/${post.id}`);
+
+                // Update UI: Hapus post dari array
+                this.posts = this.posts.filter(p => p.id !== post.id);
+
+                // Update hitungan post (untuk polling notifikasi)
+                this.knownPostCount = this.posts.length;
+
+            } catch (error) {
+                console.error('Gagal menghapus post:', error);
+                alert('Gagal menghapus post. Anda mungkin bukan pemiliknya.');
+            }
+        },
+
+        // === METHOD BARU UNTUK POLLING ===
+        startPolling() {
+            // Hentikan timer lama jika ada (untuk keamanan)
+            this.stopPolling();
+
+            // Mulai timer baru, cek status setiap 10 detik
+            this.timer = setInterval(() => {
+                this.checkStatus();
+            }, 10000); // 10000ms = 10 detik
+        },
+
+        stopPolling() {
+            if (this.timer) {
+                clearInterval(this.timer);
+                this.timer = null;
+            }
+        },
+
+        async checkStatus() {
+            try {
+                // Panggil API status (ringan) yang sudah kita buat
+                const response = await axios.get(`/api/boards/${this.boardId}/status`);
+                const serverPostCount = response.data.total_posts;
+
+                // Jika jumlah di server > jumlah yang kita tahu, tampilkan notifikasi!
+                if (serverPostCount > this.knownPostCount) {
+                    this.newPostAvailable = true;
+                    this.stopPolling(); // Hentikan polling agar notifikasi tidak berkedip
+                }
+            } catch (error) {
+                console.error('Gagal polling status:', error);
+            }
         }
     },
 };
@@ -211,5 +297,71 @@ export default {
 
 .post-item small {
     color: #555;
+}
+
+/* TAMBAHKAN STYLE UNTUK NOTIFIKASI */
+.notification-bar {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 15px;
+    font-weight: bold;
+    transition: background-color 0.2s;
+}
+
+.notification-bar:hover {
+    background-color: #0056b3;
+}
+
+.btn-delete {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #ff6b6b;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0.3;
+    transition: opacity 0.2s;
+}
+
+.board-item {
+    position: relative;
+    /* Diperlukan untuk tombol absolute */
+}
+
+.board-item:hover .btn-delete {
+    opacity: 1;
+}
+
+.btn-delete-post {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    background: transparent;
+    color: #aaa;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    opacity: 0.3;
+    transition: all 0.2s;
+}
+
+.post-item {
+    position: relative;
+    /* Diperlukan untuk tombol absolute */
+}
+
+.post-item:hover .btn-delete-post {
+    opacity: 1;
+    color: #ff6b6b;
 }
 </style>
