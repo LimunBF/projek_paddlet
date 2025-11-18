@@ -18,6 +18,7 @@ class Board extends Model
         'description',
         'visibility',
         'layout_type',
+        'background', // <-- TAMBAHKAN INI
     ];
 
     public function owner(): BelongsTo

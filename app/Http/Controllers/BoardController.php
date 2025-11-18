@@ -55,17 +55,12 @@ class BoardController extends Controller
      */
     public function update(Request $request, Board $board)
     {
-        // 1. Otorisasi: Cek kepemilikan
-        if ($board->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Tidak diizinkan'], 403);
-        }
-
-        // 2. Validasi input
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'visibility' => 'sometimes|string|in:private,public,link',
             'layout_type' => 'sometimes|string|in:wall,grid,stream',
+            'background' => 'nullable|string', // <-- TAMBAHKAN VALIDASI INI
         ]);
 
         // 3. Update board

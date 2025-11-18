@@ -12,7 +12,6 @@ class PostController extends Controller
 {
     /**
      * Menampilkan semua post di board tertentu.
-     * Route: GET /api/boards/{board}/posts
      */
     public function index(Board $board)
     {
@@ -23,31 +22,44 @@ class PostController extends Controller
 
     /**
      * Menyimpan post baru ke board tertentu.
-     * Route: POST /api/boards/{board}/posts
+     * (Versi Final Gabungan - BENAR)
      */
-    // MENJADI INI:
     public function store(Request $request, Board $board)
     {
-        // 1. Validasi input (Langsung ke validasi)
+        $isGuest =Auth::id() === null;
+        // 1. Validasi (Termasuk SEMUA kolom)
         $validated = $request->validate([
-            'content' => 'required|string',
-            'content_type' => 'nullable|string|in:text,image,link',
+            'content' => 'nullable|string|max:1000',
+            'image_path' => 'nullable|string',
             'caption' => 'nullable|string',
-            'position_x' => 'nullable|integer',
-            'position_y' => 'nullable|integer',
+            'color' => 'nullable|string|max:7', 
+            // Validasi nama tamu: Wajib jika Tamu, Boleh kosong jika Admin
+            'guest_name' => $isGuest ? 'required|string|max:50' : 'nullable',
         ]);
 
-        // 2. Buat post
+        // 2. Cek apakah ada isinya
+        if (empty($validated['content']) && empty($validated['image_path'])) {
+            return response()->json(['message' => 'Catatan harus memiliki konten atau gambar.'], 422);
+        }
+
+        // 3. Tentukan Posisi Baru
+        $max_y = $board->posts()->max('position_y');
+        $new_position_y = $max_y + 1;
+
+        // 4. Buat post (Termasuk SEMUA kolom)
         $post = $board->posts()->create([
-            'user_id' => Auth::id(), // Ajaib: 'null' jika tamu, ID jika login
-            'content' => $validated['content'],
-            'content_type' => $validated['content_type'] ?? 'text',
+            'user_id' => Auth::id(),
+            // Jika user login, guest_name null. Jika tamu, pakai inputan.
+            'guest_name' => $isGuest ? $validated['guest_name'] : null,
+            'content' => $validated['content'] ?? null,
+            'image_path' => $validated['image_path'] ?? null,
             'caption' => $validated['caption'] ?? null,
-            'position_x' => $validated['position_x'] ?? 0,
-            'position_y' => $validated['position_y'] ?? 0,
+            'color' => $request->color ?? '#ffffff',
+            'position_x' => 0,
+            'position_y' => $new_position_y,
         ]);
 
-        // 3. Muat relasi user (jika ada)
+        // 5. Muat relasi user (jika ada)
         $post->load('user:id,name');
 
         return response()->json($post, 201);
@@ -56,26 +68,19 @@ class PostController extends Controller
 
     /**
      * Update post spesifik.
-     * Route: PUT /api/posts/{post}
      */
     public function update(Request $request, Post $post)
     {
-        // 1. Otorisasi: Apakah user ini pemilik POST?
-        if ($post->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Tidak diizinkan'], 403);
-        }
-
-        // 2. Validasi (hanya update sebagian)
         $validated = $request->validate([
-            'content' => 'sometimes|required|string',
-            'caption' => 'nullable|string',
+            'content' => 'sometimes|string|nullable',
+            'caption' => 'sometimes|string|nullable',
             'position_x' => 'sometimes|integer',
             'position_y' => 'sometimes|integer',
         ]);
 
         // 3. Update
         $post->update($validated);
-        
+
         // 4. Muat relasi user dan kembalikan
         $post->load('user:id,name');
         return response()->json($post, 200); // 200 = OK
@@ -83,18 +88,13 @@ class PostController extends Controller
 
     /**
      * Hapus post spesifik.
-     * Route: DELETE /api/posts/{post}
      */
     public function destroy(Post $post)
     {
         // KITA PERLU TAHU SIAPA PEMILIK BOARD
         $boardOwnerId = $post->board->user_id;
 
-        // Otorisasi: User boleh hapus JIKA:
-        // 1. Dia adalah pemilik post INI
-        // ATAU
-        // 2. Dia adalah pemilik BOARD tempat post ini berada
-        if ($post->user_id === Auth::id() || $boardOwnerId === Auth::id()) {
+        if (Auth::check() && ($post->user_id === Auth::id() || $boardOwnerId === Auth::id())) {
             // Jika salah satu benar, izinkan hapus
             $post->delete();
             return response()->json(null, 204);

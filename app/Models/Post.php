@@ -10,13 +10,20 @@ class Post extends Model
 {
     use HasFactory;
 
+    /**
+     * Kolom yang boleh diisi secara massal.
+     */
     protected $fillable = [
         'board_id',
         'user_id',
+        'guest_name', // <-- TAMBAHKAN INI
         'content_type',
         'content',
+        'caption',
         'position_x',
         'position_y',
+        'image_path', // <-- TAMBAHKAN BARIS INI
+        'color',    
     ];
 
     /**
@@ -27,6 +34,9 @@ class Post extends Model
         return $this->belongsTo(Board::class);
     }
 
+    /**
+     * Relasi: Post ini dibuat oleh satu User.
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

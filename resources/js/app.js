@@ -8,6 +8,7 @@ import BoardComponent from "./components/BoardComponent.vue";
 import LoginComponent from "./components/LoginComponent.vue";
 import PostComponent from "./components/PostComponent.vue";
 import RegisterComponent from "./components/RegisterComponent.vue";
+import ShareModal from './components/ShareModal.vue';
 
 const app = createApp({});
 
@@ -16,6 +17,7 @@ app.component('board-component', BoardComponent);
 app.component('login-component', LoginComponent);
 app.component('post-component', PostComponent);
 app.component('register-component', RegisterComponent);
+app.component('share-modal', ShareModal);
 
 // GUNAKAN ROUTER
 app.use(router);

@@ -14,11 +14,17 @@ return new class extends Migration
         Schema::create('posts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('board_id')->constrained()->onDelete('cascade'); // Relasi ke board
+            
             // INI BARIS YANG BENAR
             $table->foreignId('user_id')->nullable()->constrained()->onDelete('set null');
             
             $table->string('content_type')->default('text'); // 'text', 'image', 'link', 'file'
-            $table->text('content'); // Bisa berisi teks, URL gambar, atau JSON
+            $table->text('content')->nullable(); // Ubah jadi nullable
+
+            // PASTIKAN DUA BARIS INI ADA:
+            $table->text('caption')->nullable(); 
+            $table->string('image_path')->nullable();
+            
             $table->integer('position_x')->default(0); // Untuk layout 'wall' (drag-drop)
             $table->integer('position_y')->default(0); // Untuk layout 'wall' (drag-drop)
             $table->timestamps();
